@@ -29,37 +29,58 @@ export const hasTamilVoice = async () => {
   return voices.some((v) => v.lang?.toLowerCase().startsWith('ta'));
 };
 
-let _currentUtter = null;
-export const speak = async (text, lang = 'ta', { rate = 0.92, onEnd } = {}) => {
-  if (!('speechSynthesis' in window)) return null;
+let _currentAudio = null;
+
+export const speak = async (text, lang = 'ta', { rate = 1.0, onEnd } = {}) => {
   stopSpeaking();
-  const voice = await pickVoice(lang);
-  const utter = new SpeechSynthesisUtterance(text);
-  if (voice) utter.voice = voice;
-  utter.lang = lang === 'ta' ? 'ta-IN' : 'en-IN';
-  utter.rate = rate;
-  utter.pitch = 1.0;
-  utter.onend = () => {
-    _currentUtter = null;
+  
+  try {
+    const res = await fetch('http://localhost:5001/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, lang })
+    });
+    
+    if (!res.ok) throw new Error('TTS failed');
+    
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    
+    _currentAudio = audio;
+    
+    audio.onended = () => {
+      _currentAudio = null;
+      URL.revokeObjectURL(url);
+      onEnd?.();
+    };
+    
+    audio.onerror = () => {
+      _currentAudio = null;
+      URL.revokeObjectURL(url);
+      onEnd?.();
+    };
+
+    audio.playbackRate = rate;
+    audio.play();
+
+    return audio;
+  } catch (err) {
+    console.error('Speech synthesis route failed:', err);
     onEnd?.();
-  };
-  utter.onerror = () => {
-    _currentUtter = null;
-    onEnd?.();
-  };
-  _currentUtter = utter;
-  window.speechSynthesis.speak(utter);
-  return utter;
+    return null;
+  }
 };
 
 export const stopSpeaking = () => {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
+  if (_currentAudio) {
+    _currentAudio.pause();
+    _currentAudio.currentTime = 0;
+    _currentAudio = null;
   }
-  _currentUtter = null;
 };
 
-export const isSpeaking = () => !!_currentUtter;
+export const isSpeaking = () => !!_currentAudio;
 
 // Pleasant success chime via Web Audio API (two short tones)
 export const playSuccessChime = () => {

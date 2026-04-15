@@ -6,6 +6,7 @@ import { DISTRICTS } from '../data/districts.js';
 import { t } from '../data/strings.js';
 import { getAuditLog } from '../utils/sahayakMock.js';
 import SahayakMode from '../components/SahayakMode.jsx';
+import { QRCodeSVG } from 'qrcode.react';
 
 const EDITABLE_FIELDS = [
   { key: 'name', type: 'text', labelTa: 'பெயர்', labelEn: 'Name' },
@@ -28,6 +29,7 @@ export default function Profile() {
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState('');
   const [showSahayak, setShowSahayak] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
 
   const audit = getAuditLog();
@@ -82,10 +84,11 @@ export default function Profile() {
         {/* Privacy banner */}
         <div className="bg-brand-green/10 text-brand-green-dark rounded-2xl p-4 flex gap-3 items-start">
           <span className="text-2xl">🔒</span>
-          <div className="text-sm">
+          <div className="flex-1 text-sm">
             <div className="font-bold mb-0.5">{t('device_only', lang)}</div>
             <div className="text-xs opacity-90">{t('profile_privacy', lang)}</div>
           </div>
+          <button onClick={() => setShowQR(true)} className="bg-white p-2 rounded-lg shadow-sm font-bold text-xs">QR</button>
         </div>
 
         {/* Fields */}
@@ -194,6 +197,26 @@ export default function Profile() {
       </div>
 
       {showSahayak && <SahayakMode lang={lang} onExit={() => setShowSahayak(false)} />}
+
+      <AnimatePresence>
+        {showQR && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+            onClick={() => setShowQR(false)}
+          >
+            <div className="bg-white p-6 rounded-2xl flex flex-col items-center">
+              <h3 className="font-bold mb-4">Scan to fetch profile</h3>
+              <div className="bg-white p-2 border-4 border-black rounded-xl">
+                 <QRCodeSVG value={JSON.stringify(vault)} size={200} />
+              </div>
+              <button className="mt-4 btn-secondary" onClick={() => setShowQR(false)}>Close</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

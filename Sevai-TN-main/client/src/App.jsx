@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import { LanguageProvider, useLanguage } from './hooks/useLanguage.js';
 import { useVault } from './hooks/useVault.js';
 import { useEligibility } from './hooks/useEligibility.js';
+import { useOnlineStatus } from './hooks/useOnlineStatus.js';
 import ChatOnboarding from './components/ChatOnboarding.jsx';
 import WowReveal from './components/WowReveal.jsx';
 import BottomNav from './components/BottomNav.jsx';
@@ -14,8 +15,14 @@ import SchemeDetail from './pages/SchemeDetail.jsx';
 import Apply from './pages/Apply.jsx';
 
 export default function App() {
+  const isOnline = useOnlineStatus();
   return (
     <LanguageProvider>
+      {!isOnline && (
+        <div className="bg-red-500 text-white text-center text-xs py-1.5 font-medium z-50 relative">
+          ⚠️ You are offline. Submissions will use SMS Fallback.
+        </div>
+      )}
       <Shell />
     </LanguageProvider>
   );

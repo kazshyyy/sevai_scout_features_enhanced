@@ -1,18 +1,35 @@
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { t, tf } from '../data/strings.js';
 import { SCHEME_BY_ID } from '../data/schemes.js';
+import { saveApplications, loadApplications } from '../utils/applications.js';
 
 const stages = ['submitted', 'under_review', 'final'];
 
 export default function StatusTimeline({ app, lang }) {
   const scheme = SCHEME_BY_ID[app.scheme_id];
   const nav = useNavigate();
+  const [showSmsToast, setShowSmsToast] = useState(false);
+
   if (!scheme) return null;
 
   const isApproved = app.status === 'approved';
   const isRejected = app.status === 'rejected';
   const isReview = app.status === 'under_review' || (!isApproved && !isRejected);
+
+  // Dev-tool: approve on double click
+  const handleApproveSim = () => {
+    if (isApproved) return;
+    const apps = loadApplications();
+    const updated = apps.map(a => a.scheme_id === app.scheme_id ? { ...a, status: 'approved' } : a);
+    saveApplications(updated);
+    window.dispatchEvent(new Event('storage'));
+    
+    // Simulate the Offline SMS fallback for status update!
+    setShowSmsToast(true);
+    setTimeout(() => setShowSmsToast(false), 4000);
+  };
 
   const nodes = [
     {
@@ -55,7 +72,7 @@ export default function StatusTimeline({ app, lang }) {
       className="card"
     >
       <div className="flex items-start justify-between mb-4">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1" onDoubleClick={handleApproveSim}>
           <h3 className="font-bold text-lg text-brand-ink leading-tight">{scheme.name_plain}</h3>
           <div className="text-xs text-brand-muted mt-0.5">{scheme.name_official}</div>
         </div>
@@ -112,6 +129,24 @@ export default function StatusTimeline({ app, lang }) {
           {t('fix_resubmit', lang)}
         </button>
       )}
+
+      {/* SMS Fallback Toast Animation */}
+      <AnimatePresence>
+        {showSmsToast && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="fixed bottom-20 left-4 right-4 z-50 bg-gray-900 border-2 border-brand-green p-4 rounded-2xl shadow-xl flex gap-3 text-white"
+          >
+            <div className="text-3xl">📱</div>
+            <div className="flex-1">
+              <div className="font-bold text-brand-green">SMS Fallback Status Update</div>
+              <div className="text-xs mt-1 text-gray-300">Message to local phone: "{smsMock.substring(0, 50)}..." successfully delivered via Twilio bypass.</div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

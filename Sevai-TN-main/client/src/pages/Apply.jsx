@@ -30,11 +30,13 @@ export default function Apply() {
 
   const [docs, setDocs] = useState({});
   const [showOCR, setShowOCR] = useState(null);
+  const [ocrError, setOcrError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showRelated, setShowRelated] = useState(false);
   const startRef = useRef(Date.now());
   const elapsedRef = useRef(0);
+  const isOnline = navigator.onLine;
 
   if (!scheme) {
     return <div className="p-6 text-center">Scheme not found</div>;
@@ -58,18 +60,46 @@ export default function Apply() {
     { label: lang === 'ta' ? 'வேலை' : 'Occupation', value: vault.occupation || '—' },
   ];
 
-  const handleDoc = (docName, file) => {
+  const handleDoc = async (docName, file) => {
+    if (!file) return;
     setShowOCR(docName);
-    setTimeout(() => {
-      setDocs((d) => ({ ...d, [docName]: file?.name || 'captured.jpg' }));
+    setOcrError(null);
+    try {
+      const formData = new FormData();
+      formData.append('document', file);
+      
+      const res = await fetch('http://localhost:5001/api/ocr', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await res.json();
+      
+      if (!data.valid) {
+        setOcrError(data.message || 'Invalid document');
+      } else {
+        setDocs((d) => ({ ...d, [docName]: file.name }));
+      }
+    } catch (e) {
+      console.error(e);
+      setOcrError('Failed to parse document. Trying again?');
+    } finally {
       setShowOCR(null);
-    }, 1500);
+    }
   };
 
   const allDocsDone = scheme.documents_required.every((d) => docs[d]);
 
   const handleSubmit = () => {
     if (submitting) return;
+
+    if (!isOnline) {
+      // Offline fallback: deep link to SMS 
+      const payload = `APPLY SCHEME=${scheme.id} UID=${vault.id || 'new'} NAME=${vault.name}`;
+      window.location.href = `sms:55555?body=${encodeURIComponent(payload)}`;
+      return;
+    }
+
     setSubmitting(true);
     elapsedRef.current = Math.round((Date.now() - startRef.current) / 1000);
     addApplication({
@@ -138,6 +168,7 @@ export default function Apply() {
         <section className="card">
           <h2 className="text-lg font-bold mb-3">{t('apply_document_title', lang)}</h2>
           <div className="space-y-2">
+            {ocrError && <div className="text-brand-amber font-semibold text-xs mb-2">⚠ {ocrError}</div>}
             {scheme.documents_required.map((d) => {
               const done = !!docs[d];
               return (
@@ -148,17 +179,17 @@ export default function Apply() {
                   }`}
                 >
                   <div
-                    className={`w-11 h-11 rounded-xl grid place-items-center text-xl ${
+                    className={`shrink-0 w-11 h-11 rounded-xl grid place-items-center text-xl ${
                       done ? 'bg-brand-green text-white' : 'bg-gray-100'
                     }`}
                   >
                     {done ? '✓' : '📷'}
                   </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-sm">{d}</div>
-                    <div className="text-[11px] text-brand-muted">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm truncate">{d}</div>
+                    <div className="text-[11px] text-brand-muted truncate">
                       {done
-                        ? `${t('apply_detected', lang)} ${d}`
+                        ? docs[d]
                         : t('apply_tap_photo', lang)}
                     </div>
                   </div>
@@ -179,12 +210,14 @@ export default function Apply() {
         <button
           disabled={submitting}
           onClick={handleSubmit}
-          className={`w-full btn-primary ${!allDocsDone ? 'opacity-70' : ''}`}
+          className={`w-full ${!isOnline ? 'bg-slate-700 text-white' : 'btn-primary'} ${!allDocsDone ? 'opacity-70' : ''}`}
         >
           {submitting
             ? lang === 'ta'
               ? 'சமர்ப்பிக்கிறது...'
               : 'Submitting...'
+            : !isOnline 
+            ? 'Submit via SMS (Offline)'
             : t('apply_submit', lang)}
         </button>
         {!allDocsDone && (
